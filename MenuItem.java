@@ -1,3 +1,4 @@
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -285,5 +286,6 @@ public class RestaurantSystem extends JFrame {
         SwingUtilities.invokeLater(() -> new RestaurantSystem().setVisible(true));
     }
 }
+
 
 
