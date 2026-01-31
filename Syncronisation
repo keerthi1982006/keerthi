@@ -1,0 +1,14 @@
+#include<stdio.h>
+#include<unistd.h>
+#include<sys/wait.h>
+int main() {
+pid_t pid=fork();
+if(pid<0) {
+perror("fork failed\n");
+return 1; }
+if(pid==0) {
+printf("pccsl407 "); }
+else {
+wait(NULL);
+printf("operating system lab\n"); }
+return 0; }
