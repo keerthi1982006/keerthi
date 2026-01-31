@@ -1,0 +1,289 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.util.*;
+import java.text.NumberFormat;
+
+class MenuItem {
+    private int id;
+    private String name;
+    private double price;
+    private String category;
+
+    public MenuItem(int id, String name, double price, String category) {
+        this.id = id;
+        this.name = name;
+        this.price = price;
+        this.category = category;
+    }
+
+    public int getId() { return id; }
+    public String getName() { return name; }
+    public double getPrice() { return price; }
+    public String getCategory() { return category; }
+
+    private String formatPrice(double amount) {
+        NumberFormat nf = NumberFormat.getCurrencyInstance(new Locale("en", "IN"));
+        return nf.format(amount);
+    }
+
+    @Override
+    public String toString() {
+        return id + ". " + name + " (" + category + ") - " + formatPrice(price);
+    }
+}
+
+class Order {
+    private Customer customer;
+    private ArrayList<MenuItem> items = new ArrayList<>();
+
+    public Order(Customer customer) {
+        this.customer = customer;
+    }
+
+    public void addItem(MenuItem item) { items.add(item); }
+    public void removeItem(MenuItem item) { items.remove(item); }
+
+    public ArrayList<MenuItem> getItems() { return items; }
+
+    public double getBillAmount() {
+        double sum = 0;
+        for (MenuItem item : items) sum += item.getPrice();
+        return sum;
+    }
+
+    private String formatPrice(double amount) {
+        NumberFormat nf = NumberFormat.getCurrencyInstance(new Locale("en", "IN"));
+        return nf.format(amount);
+    }
+
+    public String generateBill() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Customer: ").append(customer.getName())
+          .append(" (").append(customer.getContact()).append(")\n");
+        sb.append("Items:\n");
+        for (MenuItem item : items) {
+            sb.append("- ").append(item.getName())
+              .append(" ").append(formatPrice(item.getPrice())).append("\n");
+        }
+        sb.append("Total: ").append(formatPrice(getBillAmount())).append("\n");
+        return sb.toString();
+    }
+}
+
+class Customer {
+    private String name;
+    private String contact;
+    private ArrayList<Order> orderHistory = new ArrayList<>();
+
+    public Customer(String name, String contact) {
+        this.name = name;
+        this.contact = contact;
+    }
+
+    public String getName() { return name; }
+    public String getContact() { return contact; }
+    public void addOrder(Order order) { orderHistory.add(order); }
+    public ArrayList<Order> getOrderHistory() { return orderHistory; }
+
+    @Override
+    public String toString() {
+        return name + " (" + contact + ")";
+    }
+}
+
+class RestaurantManager {
+    private ArrayList<MenuItem> menu = new ArrayList<>();
+    private ArrayList<Order> allOrders = new ArrayList<>();
+    private ArrayList<Customer> customers = new ArrayList<>();
+
+    public RestaurantManager() {
+        menu.add(new MenuItem(1, "Paneer Tikka", 180, "Starter"));
+        menu.add(new MenuItem(2, "Veg Biryani", 250, "Main Course"));
+        menu.add(new MenuItem(3, "Butter Naan", 40, "Main Course"));
+        menu.add(new MenuItem(4, "Gulab Jamun", 100, "Dessert"));
+        menu.add(new MenuItem(5, "Cold Drink", 50, "Beverage"));
+    }
+
+    public ArrayList<MenuItem> getMenu() { return menu; }
+    public void addOrder(Order order) { allOrders.add(order); }
+    public ArrayList<Order> getAllOrders() { return allOrders; }
+    public void addCustomer(Customer customer) {
+        if (!customers.contains(customer)) customers.add(customer);
+    }
+    public ArrayList<Customer> getCustomers() { return customers; }
+}
+
+public class RestaurantSystem extends JFrame {
+    private RestaurantManager manager = new RestaurantManager();
+    private JList<MenuItem> menuList;
+    private DefaultListModel<MenuItem> menuModel;
+    private JList<MenuItem> orderList;
+    private DefaultListModel<MenuItem> orderModel;
+    private JTextArea outputArea;
+    private Order currentOrder;
+    private Customer currentCustomer;
+
+    public RestaurantSystem() {
+        setTitle("Restaurant Ordering System");
+        setSize(750, 500);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
+
+        // Menu Model and List
+        menuModel = new DefaultListModel<>();
+        for (MenuItem item : manager.getMenu()) menuModel.addElement(item);
+        menuList = new JList<>(menuModel);
+        JScrollPane menuScroll = new JScrollPane(menuList);
+
+        // Order Model and List
+        orderModel = new DefaultListModel<>();
+        orderList = new JList<>(orderModel);
+        JScrollPane orderScroll = new JScrollPane(orderList);
+
+        // Output Area
+        outputArea = new JTextArea();
+
+        // Top Panel: New Order and search/filter
+        JPanel topPanel = new JPanel();
+        JButton newOrderBtn = new JButton("New Order");
+        JTextField searchField = new JTextField(10);
+        JComboBox<String> categoryBox = new JComboBox<>(new String[]{"All", "Starter", "Main Course", "Dessert", "Beverage"});
+        JButton filterBtn = new JButton("Search/Filter");
+        topPanel.add(newOrderBtn);
+        topPanel.add(new JLabel("Search:"));
+        topPanel.add(searchField);
+        topPanel.add(new JLabel("Category:"));
+        topPanel.add(categoryBox);
+        topPanel.add(filterBtn);
+
+        // Buttons Panel
+        JPanel buttonPanel = new JPanel();
+        JButton addItemBtn = new JButton("Add Item");
+        JButton removeItemBtn = new JButton("Remove Item");
+        JButton finalizeBtn = new JButton("Finalize Order");
+        JButton historyBtn = new JButton("Order History");
+        buttonPanel.add(addItemBtn);
+        buttonPanel.add(removeItemBtn);
+        buttonPanel.add(finalizeBtn);
+        buttonPanel.add(historyBtn);
+
+        add(topPanel, BorderLayout.NORTH);
+        add(menuScroll, BorderLayout.WEST);
+        add(orderScroll, BorderLayout.EAST);
+        add(new JScrollPane(outputArea), BorderLayout.CENTER);
+        add(buttonPanel, BorderLayout.SOUTH);
+
+        // Actions
+        newOrderBtn.addActionListener(e -> {
+            String name = JOptionPane.showInputDialog("Enter Customer Name:");
+            String contact = JOptionPane.showInputDialog("Enter Contact Info:");
+            if (name != null && contact != null && !name.isEmpty() && !contact.isEmpty()) {
+                currentCustomer = new Customer(name, contact);
+                currentOrder = new Order(currentCustomer);
+                manager.addCustomer(currentCustomer);
+                orderModel.clear();
+                outputArea.setText("New order started for " + name + " (" + contact + ")\n");
+            } else {
+                JOptionPane.showMessageDialog(this, "Customer details required!");
+            }
+        });
+
+        addItemBtn.addActionListener(e -> {
+            if (currentOrder == null) { JOptionPane.showMessageDialog(this, "Start a new order first!"); return; }
+            MenuItem selected = menuList.getSelectedValue();
+            if (selected != null) {
+                currentOrder.addItem(selected);
+                orderModel.addElement(selected);
+            }
+        });
+
+        removeItemBtn.addActionListener(e -> {
+            MenuItem selected = orderList.getSelectedValue();
+            if (selected != null && currentOrder != null) {
+                currentOrder.removeItem(selected);
+                orderModel.removeElement(selected);
+            }
+        });
+
+      finalizeBtn.addActionListener(e -> {
+    if (currentOrder != null && !currentOrder.getItems().isEmpty()) {
+        try {
+            Connection conn = DBConnection.getConnection(); // connect to DB
+            String sql = "INSERT INTO orders (item_id, quantity, order_time) VALUES (?, ?, NOW())";
+            PreparedStatement ps = conn.prepareStatement(sql);
+
+            StringBuilder orderSummary = new StringBuilder(); // for popup
+
+            for (MenuItem item : currentOrder.getItems()) {
+                ps.setInt(1, item.getId());
+                ps.setInt(2, 1); // change if you have actual quantity
+                ps.executeUpdate();
+
+                orderSummary.append(item.getName())
+                            .append(", Quantity: 1\n");
+            }
+
+            // Show confirmation popup
+            JOptionPane.showMessageDialog(this, "Order placed successfully!\n\n" + orderSummary.toString());
+
+            // --- Keep your original logic ---
+            currentCustomer.addOrder(currentOrder);
+            manager.addOrder(currentOrder);
+
+            // Show bill in output area
+            outputArea.setText(currentOrder.generateBill());
+
+            // Clear current order
+            currentOrder = null;
+            orderModel.clear();
+
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error saving order to database!");
+        }
+    } else {
+        JOptionPane.showMessageDialog(this, "No items in order!");
+    }
+});
+
+        historyBtn.addActionListener(e -> {
+            ArrayList<Customer> customers = manager.getCustomers();
+            if (customers.isEmpty()) { JOptionPane.showMessageDialog(this, "No customers yet!"); return; }
+
+            JList<Customer> customerList = new JList<>(new Vector<>(customers));
+            JScrollPane scroll = new JScrollPane(customerList);
+            int option = JOptionPane.showConfirmDialog(this, scroll, "Select a Customer", JOptionPane.OK_CANCEL_OPTION);
+            if (option == JOptionPane.OK_OPTION) {
+                Customer selectedCustomer = customerList.getSelectedValue();
+                if (selectedCustomer != null) {
+                    outputArea.setText("Order History for " + selectedCustomer.getName() +
+                            " (" + selectedCustomer.getContact() + "):\n\n");
+                    for (Order order : selectedCustomer.getOrderHistory()) {
+                        outputArea.append(order.generateBill() + "\n");
+                    }
+                }
+            }
+        });
+
+        filterBtn.addActionListener(e -> {
+            String searchText = searchField.getText().trim().toLowerCase();
+            String category = (String) categoryBox.getSelectedItem();
+            menuModel.clear();
+            for (MenuItem item : manager.getMenu()) {
+                boolean matchesSearch = item.getName().toLowerCase().contains(searchText);
+                boolean matchesCategory = category.equals("All") || item.getCategory().equalsIgnoreCase(category);
+                if (matchesSearch && matchesCategory) menuModel.addElement(item);
+            }
+        });
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new RestaurantSystem().setVisible(true));
+    }
+}
+
+
